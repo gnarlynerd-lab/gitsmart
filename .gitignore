@@ -56,8 +56,7 @@ env/
 Thumbs.db
 
 # GitSmart specific
-.gitsmart/cache/
-.gitsmart/logs/
+.gitsmart/
 
 # Temporary files
 *.log
