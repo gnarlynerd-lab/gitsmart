@@ -346,6 +346,85 @@ def config_cmd(action, key, value):
         handle_error(e)
 
 
+@cli.command("analyze-commit")
+@click.argument("commit_hash")
+@click.option("--suggest-only", is_flag=True, help="Only suggest reasoning, don't store")
+def analyze_commit(commit_hash, suggest_only):
+    """Analyze a commit and suggest reasoning for the changes"""
+    try:
+        repo_path = ensure_git_repo()
+        gitsmart = GitSmart(repo_path)
+        
+        # Get commit details
+        commit_info = gitsmart.git_extractor.repo.commit(commit_hash)
+        
+        # Build context for AI analysis
+        context = {
+            'commit_hash': commit_hash,
+            'commit_message': commit_info.message.strip(),
+            'files_changed': list(commit_info.stats.files.keys()),
+            'lines_added': commit_info.stats.total['insertions'],
+            'lines_deleted': commit_info.stats.total['deletions'],
+            'author': commit_info.author.name,
+            'date': commit_info.committed_datetime.isoformat()
+        }
+        
+        # Use AI to analyze the commit and suggest reasoning
+        ai_service = gitsmart._get_ai_service()
+        
+        prompt = f"""Analyze this git commit and suggest concise reasoning for why this change was made:
+
+Commit: {commit_hash}
+Message: {commit_info.message.strip()}
+Files changed: {', '.join(context['files_changed'][:10])}
+Lines: +{context['lines_added']} -{context['lines_deleted']}
+
+Provide a 1-2 sentence explanation of the likely reasoning behind this change. Focus on the "why" not the "what"."""
+        
+        # Create a simple AI request (not using full repository context)
+        from openai import OpenAI
+        import os
+        
+        # Try to get AI analysis
+        try:
+            api_key = gitsmart.config.get_ai_config().get('api_key')
+            provider = gitsmart.config.get_ai_config().get('provider', 'deepseek')
+            
+            if provider == 'deepseek':
+                client = OpenAI(
+                    api_key=api_key,
+                    base_url="https://api.deepseek.com"
+                )
+                model = "deepseek-chat"
+            else:
+                client = OpenAI(api_key=api_key)
+                model = "gpt-3.5-turbo"
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=200,
+                temperature=0.3
+            )
+            
+            reasoning = response.choices[0].message.content.strip()
+            
+        except Exception:
+            # Fallback to commit message analysis
+            reasoning = f"Implemented changes related to: {commit_info.message.strip()}"
+        
+        if suggest_only:
+            console.print(reasoning)
+        else:
+            # Store as memory
+            memory_id = gitsmart.remember(reasoning, memory_type="decision", tags=["auto-analyzed"])
+            console.print(f"✅ Analyzed and stored: {reasoning}")
+            console.print(f"Memory ID: {memory_id}")
+        
+    except Exception as e:
+        handle_error(e)
+
+
 def main():
     """Main entry point"""
     try:

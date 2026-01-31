@@ -1,0 +1,99 @@
+#!/bin/bash
+# GitSmart post-commit hook
+# Analyzes commits and prompts for decision documentation
+
+# Exit if not in a GitSmart-enabled repo
+if [ ! -command -v gitsmart >/dev/null 2>&1 ]; then
+    exit 0
+fi
+
+# Get the latest commit info
+COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_MSG=$(git log -1 --pretty=%B)
+FILES_CHANGED=$(git diff-tree --no-commit-id --name-only -r HEAD)
+LINES_CHANGED=$(git diff HEAD~1..HEAD --numstat | awk '{sum += $1 + $2} END {print sum}')
+
+# Skip if it's a merge commit or very small change
+if git rev-list --count --merges HEAD~1..HEAD | grep -q "1" || [ "$LINES_CHANGED" -lt 10 ]; then
+    exit 0
+fi
+
+# Detect decision-worthy patterns
+DECISION_INDICATORS=(
+    "switch.*to"
+    "choose.*over"
+    "replace.*with"
+    "migrate.*from"
+    "refactor"
+    "architecture"
+    "design"
+    "implement"
+    "add.*support"
+    "remove.*deprecated"
+)
+
+# Check commit message for decision indicators
+LOOKS_LIKE_DECISION=false
+for indicator in "${DECISION_INDICATORS[@]}"; do
+    if echo "$COMMIT_MSG" | grep -qi "$indicator"; then
+        LOOKS_LIKE_DECISION=true
+        break
+    fi
+done
+
+# Check file patterns that suggest architectural changes
+ARCHITECTURAL_FILES=(
+    "package.json"
+    "requirements.txt"
+    "Dockerfile" 
+    "docker-compose"
+    "config"
+    "settings"
+    ".env"
+    "schema"
+    "migration"
+)
+
+TOUCHES_ARCHITECTURE=false
+for file in $FILES_CHANGED; do
+    for pattern in "${ARCHITECTURAL_FILES[@]}"; do
+        if echo "$file" | grep -qi "$pattern"; then
+            TOUCHES_ARCHITECTURE=true
+            break 2
+        fi
+    done
+done
+
+# Prompt if this looks like a decision
+if [ "$LOOKS_LIKE_DECISION" = true ] || [ "$TOUCHES_ARCHITECTURE" = true ] || [ "$LINES_CHANGED" -gt 100 ]; then
+    echo ""
+    echo "🤖 GitSmart detected potential decision in commit: $COMMIT_HASH"
+    echo "📝 Message: $COMMIT_MSG"
+    echo "📊 Changed: $LINES_CHANGED lines across $(echo "$FILES_CHANGED" | wc -l) files"
+    echo ""
+    
+    # Auto-generate suggested reasoning based on commit
+    SUGGESTED_REASON=$(gitsmart analyze-commit "$COMMIT_HASH" 2>/dev/null || echo "$COMMIT_MSG")
+    
+    echo "💡 Suggested reasoning: $SUGGESTED_REASON"
+    echo ""
+    
+    # Prompt user
+    read -p "Document this decision? [Y/n/e(dit)] " -n 1 -r
+    echo ""
+    
+    case $REPLY in
+        [Ee]* ) 
+            echo "Enter your reasoning:"
+            read -r USER_REASON
+            gitsmart remember "$USER_REASON" --type=decision --tag=auto-detected
+            ;;
+        [Nn]* ) 
+            echo "Skipped documentation"
+            ;;
+        * ) 
+            gitsmart remember "$SUGGESTED_REASON" --type=decision --tag=auto-detected
+            echo "✅ Decision documented automatically"
+            ;;
+    esac
+fi
