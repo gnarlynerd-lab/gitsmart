@@ -14,6 +14,9 @@ pip install gitsmart
 cd your-project
 gitsmart init
 
+# Enable automated memory capture (optional but recommended)
+./install-hooks.sh
+
 # Ask questions
 gitsmart ask "Why do we use Redis?"
 gitsmart ask "What is this repository about?"
@@ -51,15 +54,46 @@ gitsmart remember "Switched to JWT for stateless auth"
 gitsmart ask "Why did we choose JWT?"
 ```
 
+### 🔄 **Automated Capture** 
+Install git hooks to automatically document decisions as you code:
+
+```bash
+# Install hooks
+./install-hooks.sh
+
+# Now every significant commit prompts for documentation
+git commit -m "Switch from REST to GraphQL"
+
+🤖 GitSmart detected architectural decision. Save reasoning?
+💡 Suggested reasoning: GraphQL chosen for better type safety and reduced over-fetching
+[Y/n/edit]: Y
+
+✅ Decision documented automatically
+```
+
 ## How It Works
 
-GitSmart analyzes your git repository to understand:
-- **Commit history and messages** - What changes were made and why
-- **File evolution** - How code evolved over time  
-- **Developer context** - Who wrote what and when
-- **Decision patterns** - Why technical choices were made
+GitSmart creates organizational memory in three ways:
 
-It then uses AI to make this information searchable through natural language.
+### 📊 **Repository Analysis** 
+Automatically analyzes your git repository to understand:
+- **Commit history and messages** - What changes were made and when
+- **File evolution** - How code evolved over time  
+- **Developer context** - Who contributed what and when
+- **Change patterns** - Frequency and type of modifications
+
+### 🤖 **Automated Documentation**
+Optional git hooks capture decisions as they happen:
+- **Detects significant commits** (architectural changes, large refactors)
+- **AI suggests reasoning** based on commit content and file changes
+- **Prompts for confirmation** or manual editing
+- **Stores as git notes** that sync with your repository
+
+### 💭 **Team Memory**
+All captured knowledge becomes part of your repository:
+- **Git notes storage** - Memories sync across the team automatically
+- **AI-powered search** - Natural language queries find relevant context
+- **Contextual responses** - Answers include both git history and stored decisions
 
 ## Installation
 
@@ -70,7 +104,7 @@ pip install gitsmart
 ### Requirements
 - Python 3.8+
 - Git repository
-- OpenAI API key (get one at [platform.openai.com](https://platform.openai.com/api-keys))
+- DeepSeek API key (get one at [platform.deepseek.com](https://platform.deepseek.com)) or OpenAI API key
 
 ## Setup
 
@@ -80,12 +114,19 @@ pip install gitsmart
    gitsmart init
    ```
 
-2. **Provide your OpenAI API key:**
+2. **Provide your API key:**
    ```bash
+   export DEEPSEEK_API_KEY="your-api-key-here"
+   # or
    export OPENAI_API_KEY="your-api-key-here"
    ```
 
-3. **Start asking questions:**
+3. **(Optional) Install automated memory capture:**
+   ```bash
+   ./install-hooks.sh
+   ```
+
+4. **Start asking questions:**
    ```bash
    gitsmart ask "What is this repository about?"
    ```
@@ -120,6 +161,20 @@ gitsmart remember "Bug in payment flow - investigate timeout issues"
 gitsmart remember "Team agreed to use TypeScript for new features"
 ```
 
+### Automated Documentation
+
+```bash
+# Install git hooks for automatic decision capture
+./install-hooks.sh
+
+# Analyze any commit manually  
+gitsmart analyze-commit HEAD --suggest-only
+
+# Test the automation
+git commit -m "Major refactor of authentication system"
+# → GitSmart will automatically prompt to document the decision
+```
+
 ### Utility Commands
 
 ```bash
@@ -134,13 +189,17 @@ GitSmart stores configuration in `.gitsmart/config.yml`:
 
 ```yaml
 ai:
-  provider: openai
-  model: gpt-4
-  api_key_env: OPENAI_API_KEY
+  provider: deepseek    # or openai
+  model: deepseek-chat  # or gpt-3.5-turbo, gpt-4
+  api_key_env: DEEPSEEK_API_KEY
 
 output:
   format: plain
   color: true
+  
+hooks:
+  enabled: true
+  auto_analyze: true
 ```
 
 ## Use Cases
@@ -167,7 +226,15 @@ gitsmart ask "What was the original reason for this weird hack?"
 
 ### 📋 **Decision Documentation**
 ```bash
+# Manual documentation
 gitsmart remember "Chose FastAPI over Flask for better async support"
+
+# Or let automation handle it
+git commit -m "Replace Flask with FastAPI for async endpoints"
+🤖 GitSmart: Document this architectural decision? [Y/n] Y
+✅ Decision captured: FastAPI chosen for non-blocking request handling...
+
+# Later, anyone can ask
 gitsmart ask "What web framework decisions have we made?"
 ```
 
@@ -235,12 +302,15 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Roadmap
 
-- [ ] Multiple AI provider support (Claude, local models)
+- [x] Git-based team collaboration (git notes storage)
+- [x] Automated decision capture (git hooks) 
+- [x] Multiple AI provider support (DeepSeek, OpenAI)
 - [ ] Cross-repository analysis  
-- [ ] Team collaboration features
 - [ ] Web dashboard for business users
-- [ ] Integration with GitHub/GitLab
+- [ ] Integration with GitHub/GitLab  
 - [ ] VSCode extension
+- [ ] Local LLM support (Ollama)
+- [ ] Slack/Teams integration
 
 ## Support
 
