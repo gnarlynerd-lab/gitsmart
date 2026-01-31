@@ -1,0 +1,12 @@
+MEMORY: decision
+Chose GitNotesStorage over file-based storage because git notes provide automatic team synchronization through normal git workflows - no separate sync mechanism needed
+
+---
+{
+  "id": "38558c55-5c58-44ef-8454-71bc127c38ad",
+  "content": "Chose GitNotesStorage over file-based storage because git notes provide automatic team synchronization through normal git workflows - no separate sync mechanism needed",
+  "enhanced_content": "**Decision Summary**  \nChose GitNotesStorage over file-based storage to leverage git notes for automatic team synchronization via existing git workflows, eliminating the need for a separate sync mechanism.\n\n**Apparent Reasoning**  \n- **Integration with Git Workflows:** Git notes are inherently synchronized through standard git operations (push, pull, fetch), reducing complexity.  \n- **Team Collaboration:** Avoids building or maintaining a custom synchronization layer, as notes propagate with commits.  \n- **Minimal Overhead:** No additional files or external systems are required, keeping the repository self-contained.\n\n**Relevant Technical Details**  \n- **Git Notes:** Annotates commits with metadata without altering the commit history, stored in `refs/notes/commits`.  \n- **Synchronization:** Notes are pushed/fetched with `git push origin refs/notes/*` and `git fetch origin refs/notes/*:refs/notes/*`.  \n- **Conflict Handling:** Merge conflicts may occur if notes are edited concurrently, requiring resolution similar to code conflicts.\n\n**Potential Future Considerations**  \n- **Scalability:** Large volumes of notes could impact git performance; consider periodic cleanup or archiving.  \n- **Tooling Support:** Ensure team familiarity with git notes commands or integrate tooling for ease of use.  \n- **Backup Strategy:** Notes are part of the repository but may be excluded by default in some git operations; verify backup processes include them.",
+  "type": "decision",
+  "tags": [],
+  "created_at": "2026-01-31T22:04:01.032126+00:00"
+}
