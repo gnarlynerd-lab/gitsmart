@@ -104,7 +104,10 @@ pip install gitsmart
 ### Requirements
 - Python 3.8+
 - Git repository
-- DeepSeek API key (get one at [platform.deepseek.com](https://platform.deepseek.com)) or OpenAI API key
+- AI provider access:
+  - **Public APIs**: DeepSeek, OpenAI
+  - **Enterprise**: Azure OpenAI, AWS Bedrock, Google Vertex AI
+  - **Local**: Ollama, GitHub Copilot Chat
 
 ## Setup
 
@@ -114,11 +117,18 @@ pip install gitsmart
    gitsmart init
    ```
 
-2. **Provide your API key:**
+2. **Configure AI provider:**
    ```bash
+   # Public APIs
    export DEEPSEEK_API_KEY="your-api-key-here"
-   # or
    export OPENAI_API_KEY="your-api-key-here"
+   
+   # Enterprise Azure OpenAI
+   export AZURE_OPENAI_API_KEY="your-key"
+   export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com/"
+   
+   # Local/On-premise
+   export OLLAMA_BASE_URL="http://localhost:11434"
    ```
 
 3. **(Optional) Install automated memory capture:**
@@ -189,9 +199,20 @@ GitSmart stores configuration in `.gitsmart/config.yml`:
 
 ```yaml
 ai:
-  provider: deepseek    # or openai
-  model: deepseek-chat  # or gpt-3.5-turbo, gpt-4
+  provider: deepseek    # deepseek, openai, azure, ollama
+  model: deepseek-chat  # provider-specific models
   api_key_env: DEEPSEEK_API_KEY
+
+# Enterprise configurations
+enterprise:
+  azure:
+    endpoint: "https://your-resource.openai.azure.com/"
+    deployment_name: "gpt-4"
+    api_version: "2024-02-15-preview"
+  
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama2:13b"
 
 output:
   format: plain
@@ -243,6 +264,23 @@ gitsmart ask "What web framework decisions have we made?"
 gitsmart ask "What files are related to user authentication?"
 gitsmart ask "Who knows the most about the payment system?"
 gitsmart explain mysterious_bug_fix.py
+```
+
+### 🏢 **Enterprise Deployment**
+```bash
+# Configure for Azure OpenAI (data stays in your tenant)
+gitsmart config set ai.provider azure
+gitsmart config set azure.endpoint "https://your-company.openai.azure.com/"
+
+# Or use on-premise Ollama for complete data isolation
+gitsmart config set ai.provider ollama
+gitsmart config set ollama.base_url "http://internal-llm.company.com:11434"
+
+# Automated decision capture works with any provider
+./install-hooks.sh
+git commit -m "Implement new compliance requirements"
+🤖 GitSmart: Document compliance decision? [Y/n] Y
+✅ Stored securely in your enterprise environment
 ```
 
 ## Examples
@@ -304,6 +342,12 @@ JWT token handling utilities created to implement stateless authentication.
 - Standard HTTPS encryption for API calls
 - Local git analysis only
 
+🏢 **Enterprise deployment options:**
+- **Azure OpenAI**: Data stays in your Azure tenant
+- **AWS Bedrock**: Private VPC deployment available
+- **On-premise**: Use Ollama or local LLMs for complete data isolation
+- **GitHub Copilot**: Integrate with existing enterprise AI tooling
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
@@ -314,15 +358,25 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Roadmap
 
+**✅ Phase 1 - Core Functionality**
 - [x] Git-based team collaboration (git notes storage)
 - [x] Automated decision capture (git hooks) 
 - [x] Multiple AI provider support (DeepSeek, OpenAI)
+
+**🚀 Phase 2 - Enterprise Integration**  
+- [ ] Azure OpenAI integration
+- [ ] AWS Bedrock support
+- [ ] Local LLM support (Ollama)
+- [ ] GitHub Copilot Chat integration
+- [ ] SAML/SSO authentication
+
+**📈 Phase 3 - Scale & Integration**
 - [ ] Cross-repository analysis  
 - [ ] Web dashboard for business users
 - [ ] Integration with GitHub/GitLab  
 - [ ] VSCode extension
-- [ ] Local LLM support (Ollama)
 - [ ] Slack/Teams integration
+- [ ] JIRA/Linear decision linking
 
 ## Support
 
