@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
+import re
 
+import git
 from .exceptions import StorageError
 
 
@@ -337,3 +339,285 @@ class KnowledgeStorage:
             total_size /= 1024
         
         return f"{total_size:.1f}TB"
+
+
+class GitNotesStorage:
+    """Git-based storage using git notes for team collaboration"""
+    
+    def __init__(self, repo_path: str):
+        self.repo_path = Path(repo_path).resolve()
+        try:
+            self.repo = git.Repo(str(self.repo_path))
+        except git.exc.InvalidGitRepositoryError:
+            raise StorageError(f"Not a git repository: {repo_path}")
+        
+        # Use custom notes ref for GitSmart
+        self.notes_ref = "refs/notes/gitsmart"
+    
+    def store_memory(
+        self,
+        content: str,
+        enhanced_content: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+        memory_type: str = "decision",
+        tags: Optional[List[str]] = None
+    ) -> str:
+        """Store a memory as a git note"""
+        
+        memory_id = str(uuid.uuid4())
+        
+        # Create structured note content
+        note_data = {
+            "id": memory_id,
+            "content": content,
+            "enhanced_content": enhanced_content,
+            "type": memory_type,
+            "tags": tags or [],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Format as readable text + JSON
+        note_content = f"""MEMORY: {memory_type}
+{content}
+
+---
+{json.dumps(note_data, indent=2)}"""
+        
+        # Determine target commit
+        target_commit = None
+        if context and 'current_commit' in context:
+            # Try to use commit from context
+            if isinstance(context['current_commit'], dict):
+                target_commit = context['current_commit'].get('hash')
+            else:
+                target_commit = str(context['current_commit'])
+        
+        if not target_commit:
+            # Use HEAD if no specific commit
+            target_commit = self.repo.head.commit.hexsha
+        
+        # Add git note
+        try:
+            # Create or update note
+            self.repo.git.notes("--ref", self.notes_ref, "add", 
+                               "-f", "-m", note_content, target_commit)
+        except git.exc.GitCommandError as e:
+            raise StorageError(f"Failed to store memory as git note: {e}")
+        
+        return memory_id
+    
+    def store_query(self, question: str, response: str, context: Dict[str, Any]) -> str:
+        """Store a query/response for learning (as git note)"""
+        
+        query_id = str(uuid.uuid4())
+        
+        # Create query note content
+        note_data = {
+            "id": query_id,
+            "question": question,
+            "response": response,
+            "type": "query",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Format as readable text + JSON
+        note_content = f"""QUERY: {question}
+
+RESPONSE: {response[:200]}...
+
+---
+{json.dumps(note_data, indent=2)}"""
+        
+        # Store as note on HEAD
+        target_commit = self.repo.head.commit.hexsha
+        
+        try:
+            # Add git note with different prefix to distinguish from memories
+            self.repo.git.notes("--ref", "refs/notes/gitsmart-queries", "add", 
+                               "-f", "-m", note_content, target_commit)
+        except git.exc.GitCommandError as e:
+            # Non-fatal - just log and continue
+            pass
+        
+        return query_id
+    
+    def store_explanation(self, filepath: str, explanation: str, context: Dict[str, Any]) -> str:
+        """Store file explanation (as git note)"""
+        
+        explanation_id = str(uuid.uuid4())
+        
+        # Create explanation note content  
+        note_data = {
+            "id": explanation_id,
+            "filepath": filepath,
+            "explanation": explanation,
+            "type": "explanation",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Format as readable text + JSON
+        note_content = f"""EXPLANATION: {filepath}
+
+{explanation[:300]}...
+
+---
+{json.dumps(note_data, indent=2)}"""
+        
+        # Store as note on HEAD
+        target_commit = self.repo.head.commit.hexsha
+        
+        try:
+            self.repo.git.notes("--ref", "refs/notes/gitsmart-explanations", "add", 
+                               "-f", "-m", note_content, target_commit)
+        except git.exc.GitCommandError as e:
+            # Non-fatal - just log and continue
+            pass
+        
+        return explanation_id
+    
+    def search_memories(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Search git notes for relevant memories"""
+        memories = self._load_all_memories()
+        
+        query_lower = query.lower()
+        scored_memories = []
+        
+        for memory in memories:
+            score = 0
+            
+            # Search in content
+            if query_lower in memory.content.lower():
+                score += 5
+            
+            # Search in enhanced content
+            if memory.enhanced_content and query_lower in memory.enhanced_content.lower():
+                score += 3
+            
+            # Search in tags
+            for tag in memory.tags:
+                if query_lower in tag.lower():
+                    score += 2
+            
+            # Search in memory type
+            if query_lower in memory.memory_type.lower():
+                score += 1
+            
+            if score > 0:
+                scored_memories.append((score, memory))
+        
+        # Sort by score and return
+        scored_memories.sort(key=lambda x: x[0], reverse=True)
+        return [memory.to_dict() for score, memory in scored_memories[:limit]]
+    
+    def get_memories_by_type(self, memory_type: str) -> List[Dict[str, Any]]:
+        """Get all memories of a specific type"""
+        memories = self._load_all_memories()
+        return [m.to_dict() for m in memories if m.memory_type == memory_type]
+    
+    def get_recent_memories(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent memories"""
+        memories = self._load_all_memories()
+        # Sort by creation time
+        memories.sort(key=lambda m: m.created_at, reverse=True)
+        return [m.to_dict() for m in memories[:limit]]
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get storage statistics"""
+        memories = self._load_all_memories()
+        
+        if not memories:
+            return {
+                'decision_count': 0,
+                'last_activity': 'Never',
+                'cache_size': '0B',
+                'recent_decisions': []
+            }
+        
+        # Count by type
+        decision_count = len([m for m in memories if m.memory_type == 'decision'])
+        
+        # Get last activity
+        last_memory = max(memories, key=lambda m: m.created_at)
+        last_activity = last_memory.created_at
+        
+        # Recent decisions
+        recent_decisions = [
+            m.content[:100] + "..." if len(m.content) > 100 else m.content
+            for m in sorted(memories, key=lambda m: m.created_at, reverse=True)[:5]
+            if m.memory_type == 'decision'
+        ]
+        
+        return {
+            'decision_count': decision_count,
+            'last_activity': last_activity,
+            'cache_size': f"{len(memories)} memories",
+            'recent_decisions': recent_decisions
+        }
+    
+    def _load_all_memories(self) -> List[Memory]:
+        """Load all memories from git notes"""
+        memories = []
+        
+        try:
+            # List all notes in our custom ref
+            try:
+                notes_output = self.repo.git.notes("--ref", self.notes_ref, "list")
+                if not notes_output.strip():
+                    return memories
+            except git.exc.GitCommandError:
+                # No notes exist yet
+                return memories
+            
+            # Get each note
+            for line in notes_output.strip().split('\n'):
+                if not line:
+                    continue
+                    
+                parts = line.split(' ')
+                if len(parts) >= 2:
+                    note_hash = parts[0]
+                    commit_hash = parts[1]
+                    
+                    try:
+                        # Get note content
+                        note_content = self.repo.git.notes("--ref", self.notes_ref, 
+                                                         "show", commit_hash)
+                        
+                        # Parse the JSON from the note
+                        memory = self._parse_note_content(note_content)
+                        if memory:
+                            memories.append(memory)
+                    except (git.exc.GitCommandError, json.JSONDecodeError, Exception):
+                        # Skip invalid notes
+                        continue
+        
+        except Exception as e:
+            # Return empty list if git notes fails
+            pass
+        
+        return memories
+    
+    def _parse_note_content(self, note_content: str) -> Optional[Memory]:
+        """Parse a git note into a Memory object"""
+        try:
+            # Find JSON part (after ---)
+            if '---' in note_content:
+                json_part = note_content.split('---', 1)[1].strip()
+            else:
+                # Fallback: treat entire content as JSON
+                json_part = note_content
+            
+            data = json.loads(json_part)
+            
+            return Memory(
+                id=data.get('id', str(uuid.uuid4())),
+                content=data.get('content', ''),
+                enhanced_content=data.get('enhanced_content'),
+                memory_type=data.get('type', 'decision'),
+                context={},  # Context stored separately in git
+                tags=data.get('tags', []),
+                created_at=data.get('created_at', datetime.now(timezone.utc).isoformat())
+            )
+        
+        except (json.JSONDecodeError, KeyError):
+            return None

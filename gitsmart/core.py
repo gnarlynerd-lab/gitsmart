@@ -10,7 +10,7 @@ from datetime import datetime
 
 from .git_context import GitContextExtractor, RepoStats, FileHistory
 from .ai_provider import AIProviderFactory, AIService, AIResponse
-from .storage import KnowledgeStorage
+from .storage import KnowledgeStorage, GitNotesStorage
 from .config import Config
 from .exceptions import GitSmartError, NotAGitRepoError
 
@@ -28,7 +28,7 @@ class GitSmart:
             raise e
         
         self.config = Config(self.repo_path)
-        self.storage = KnowledgeStorage(self.repo_path)
+        self.storage = GitNotesStorage(self.repo_path)
         
         # Initialize AI service (lazy loaded)
         self._ai_service: Optional[AIService] = None
