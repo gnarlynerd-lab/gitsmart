@@ -287,10 +287,22 @@ JWT token handling utilities created to implement stateless authentication.
 
 ## Privacy and Security
 
-- **Local Processing**: Git analysis happens locally on your machine
-- **API Calls**: Only processed content is sent to AI providers  
-- **No Code Storage**: Your code never leaves your machine permanently
-- **API Key Control**: You control and provide your own AI API keys
+⚠️ **What gets sent to AI providers:**
+- Commit messages and hashes (but not diff content)
+- File paths and names (but not file contents)
+- Author names and contributor info
+- Repository structure and metadata
+
+✅ **What stays local:**
+- Actual source code and file contents
+- Database contents, API keys, secrets
+- Git objects and repository data
+
+🔒 **Security measures:**
+- You control your own AI API keys
+- No permanent storage of your data by GitSmart
+- Standard HTTPS encryption for API calls
+- Local git analysis only
 
 ## Contributing
 
